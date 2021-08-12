@@ -1167,6 +1167,31 @@ func (proc *HandleT) processJobsForDest(jobList []*jobsdb.JobT, parsedEventList 
 			eventsToTransform = eventList
 		}
 
+		// filter out events with unsupported message types
+		filteredEvents := []transformer.TransformerEventT{}
+		for _, event := range eventsToTransform {
+			destinationDef := event.Destination.DestinationDefinition
+			supportedTypes, ok := destinationDef.Config["supportedMessageTypes"]
+			if ok {
+				messageType := event.Message["type"].(string)
+				found := false
+				for _, typ := range supportedTypes.([]interface{}) {
+					if messageType == typ.(string) {
+						found = true
+						filteredEvents = append(filteredEvents, event)
+					}
+				}
+				if !found {
+					pkgLogger.Info("Message Type " + messageType + " not supported for Destination " + destinationDef.Name)
+				}
+			} else {
+				pkgLogger.Info("supportedMessageTypes missing from Config for Destination " + destinationDef.Name)
+				// allow event
+				filteredEvents = append(filteredEvents, event)
+			}
+		}
+		eventsToTransform = filteredEvents
+
 		if len(eventsToTransform) == 0 {
 			continue
 		}
